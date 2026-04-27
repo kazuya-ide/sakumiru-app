@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { relName } from "@/lib/supabase/relation-types";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,7 @@ export default async function InvoicesPage() {
                   <tr key={inv.id} className="border-t hover:bg-slate-50">
                     <td className="px-4 py-2 font-medium">{inv.no ?? "-"}</td>
                     <td className="px-4 py-2 hidden md:table-cell">
-                      {(inv.project as any)?.name ?? "-"}
+                      {relName(inv.project) ?? "-"}
                     </td>
                     <td className="px-4 py-2">
                       ¥{(inv.amount ?? 0).toLocaleString("ja-JP")}

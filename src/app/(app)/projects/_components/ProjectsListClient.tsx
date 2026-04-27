@@ -311,7 +311,9 @@ export default function ProjectsListClient({
       </div>
 
       {/* 詳細フィルターモーダル */}
+      {/* key prop で open/close 時に再 mount → モーダル内の filters state を initial で reset */}
       <DetailFilterModal
+        key={modalOpen ? "open" : "closed"}
         open={modalOpen}
         initial={detailFilters}
         onClose={() => setModalOpen(false)}

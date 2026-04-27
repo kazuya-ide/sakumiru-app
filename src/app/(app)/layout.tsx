@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import AppShell from "@/components/layout/app-shell";
 import type { PlanTier } from "@/lib/plans/features";
+import { firstCompany, type RelationCompany } from "@/lib/supabase/relation-types";
 
 export default async function AppLayout({
   children,
@@ -22,9 +23,9 @@ export default async function AppLayout({
     .eq("user_id", user.id)
     .single();
 
-  const plan: PlanTier =
-    (membership?.company as any)?.plan ?? "starter";
-  const companyName = (membership?.company as any)?.name ?? "会社名未設定";
+  const company = firstCompany(membership?.company as RelationCompany);
+  const plan: PlanTier = company?.plan ?? "starter";
+  const companyName = company?.name ?? "会社名未設定";
 
   return (
     <AppShell

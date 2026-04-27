@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { relName } from "@/lib/supabase/relation-types";
 
 export const dynamic = "force-dynamic";
 
@@ -37,11 +38,14 @@ export default async function SchedulePage() {
               <div>
                 <div className="font-medium">{s.title}</div>
                 {s.location && <div className="text-xs text-slate-500 mt-0.5">📍 {s.location}</div>}
-                {(s.project as any)?.name && (
-                  <div className="text-xs text-slate-400 mt-0.5">
-                    案件: {(s.project as any).name}
-                  </div>
-                )}
+                {(() => {
+                  const projName = relName(s.project);
+                  return projName ? (
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      案件: {projName}
+                    </div>
+                  ) : null;
+                })()}
               </div>
             </div>
           ))

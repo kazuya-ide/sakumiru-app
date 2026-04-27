@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { relName } from "@/lib/supabase/relation-types";
 
 export const dynamic = "force-dynamic";
 
@@ -48,11 +49,14 @@ export default async function ReportsPage() {
                   作業員 {r.worker_count ?? 0}名
                 </div>
               </div>
-              {(r.project as any)?.name && (
-                <div className="text-xs text-slate-400 mb-1">
-                  案件: {(r.project as any).name}
-                </div>
-              )}
+              {(() => {
+                const projName = relName(r.project);
+                return projName ? (
+                  <div className="text-xs text-slate-400 mb-1">
+                    案件: {projName}
+                  </div>
+                ) : null;
+              })()}
               {r.content && (
                 <p className="text-sm text-slate-700 line-clamp-2">{r.content}</p>
               )}

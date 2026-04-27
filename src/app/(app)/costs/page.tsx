@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { relName } from "@/lib/supabase/relation-types";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,7 @@ export default async function CostsPage() {
                   <td className="px-4 py-2">{c.cost_date}</td>
                   <td className="px-4 py-2">{c.category}</td>
                   <td className="px-4 py-2 hidden md:table-cell">
-                    {(c.project as any)?.name ?? "-"}
+                    {relName(c.project) ?? "-"}
                   </td>
                   <td className="px-4 py-2 hidden md:table-cell">{c.vendor ?? "-"}</td>
                   <td className="px-4 py-2 text-right font-medium">

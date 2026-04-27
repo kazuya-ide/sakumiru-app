@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { relName } from "@/lib/supabase/relation-types";
 
 export const dynamic = "force-dynamic";
 
@@ -52,10 +53,10 @@ export default async function AttendancePage() {
                 <tr key={r.id} className="border-t hover:bg-slate-50">
                   <td className="px-4 py-2">{r.work_date}</td>
                   <td className="px-4 py-2 font-medium">
-                    {(r.worker as any)?.name ?? "-"}
+                    {relName(r.worker) ?? "-"}
                   </td>
                   <td className="px-4 py-2 hidden md:table-cell">
-                    {(r.project as any)?.name ?? "-"}
+                    {relName(r.project) ?? "-"}
                   </td>
                   <td className="px-4 py-2 hidden md:table-cell">{r.type ?? "日勤"}</td>
                   <td className="px-4 py-2 text-right">{r.hours}h</td>

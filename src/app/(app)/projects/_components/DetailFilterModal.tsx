@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+// 親側から `key={modalOpen ? "open" : "closed"}` を渡すことで、
+// open に切り替わった瞬間に React が本コンポーネントを再 mount する
+// → useState の初期値で initial が再評価され、reset が成立する。
+// useEffect 内 setState（react-hooks/set-state-in-effect 違反）を排除した。
+// 詳細は docs/incident-log.md INC-006 参照。
+
+import { useState } from "react";
 import { X } from "lucide-react";
 
 export type DetailFilters = {
@@ -31,10 +37,6 @@ export default function DetailFilterModal({
   onClear,
 }: Props) {
   const [filters, setFilters] = useState<DetailFilters>(initial);
-
-  useEffect(() => {
-    if (open) setFilters(initial);
-  }, [open, initial]);
 
   if (!open) return null;
 

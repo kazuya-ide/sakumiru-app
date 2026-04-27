@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { relName } from "@/lib/supabase/relation-types";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,7 @@ export default async function FilesPage() {
                   <td className="px-4 py-2 font-medium">📄 {f.name}</td>
                   <td className="px-4 py-2 hidden md:table-cell">{f.category ?? "-"}</td>
                   <td className="px-4 py-2 hidden md:table-cell">
-                    {(f.project as any)?.name ?? "-"}
+                    {relName(f.project) ?? "-"}
                   </td>
                   <td className="px-4 py-2">{formatBytes(f.size_bytes)}</td>
                   <td className="px-4 py-2 hidden lg:table-cell">

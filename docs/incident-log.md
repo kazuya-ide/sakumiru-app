@@ -172,22 +172,46 @@ Next.js 16 で `next lint` コマンドは廃止された。`package.json` の
 Next.js 16 アップグレード時に `next lint` 廃止に追従せず、ESLint 9 への移行も
 未完のまま CI スクリプトだけが古い前提で残っていた。
 
-### 暫定修正（本コミット）
+### 暫定修正 → **恒久修正済み（同日内に追加対応）**
 
-`package.json` の `lint` スクリプトを no-op + 案内メッセージに置換:
+最初は `package.json` の `lint` スクリプトを no-op に置換して CI を通した
+（ANY型のような対症療法）が、ユーザーから「型チェックの ANY のような
+その場しのぎはダメ」と指摘を受け、**同日中に正規対応に切り替えた**。
 
-```json
-"lint": "echo 'lint: skipped (Next.js 16 で next lint 廃止 / ESLint 9 移行は Phase 2)'"
+恒久対応の中身:
+
+1. `eslint` 8 → 9、`eslint-config-next` 14.2.5 → 16.2.4 に更新
+2. flat config 形式の `eslint.config.mjs` を新規作成
+3. `eslint-config-next` 16.x は flat config 配列を直接 export しているため
+   FlatCompat は不要（最初それで詰まった）
+4. `package.json` の `lint` を `eslint .` に戻す
+5. 自動生成ファイル（`database.types.ts`）は ignore に追加
+
+```js
+// eslint.config.mjs
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
+import nextTypescript from "eslint-config-next/typescript";
+
+export default [
+  { ignores: [".next/**", "node_modules/**", "src/lib/supabase/database.types.ts", ...] },
+  ...nextCoreWebVitals,
+  ...nextTypescript,
+];
 ```
 
-CI は `npm run lint` を呼ぶだけなので exit 0 で通る。
+これで本物の lint が動き出し、INC-006 の問題群（as any 14箇所 / setState in
+effect / DROP済カラム参照 / Link 未使用 等）が一気に検出された。
+それらの修正は INC-006 を参照。
 
-### 恒久対応（Phase 2）
+### 再発防止チェックリスト
 
-- ESLint 9 + flat config (`eslint.config.mjs`) を新規作成
-- `next/core-web-vitals` ルールセットを継承
-- `package.json` の `lint` を `eslint .` に戻す
-- 既存の deployment-errors.md にも同件の記載あり → 統合検討
+メジャーバージョンアップ系の PR は必ず:
+
+- [ ] そのフレームワークの **Breaking Changes** ドキュメントを読んだ？
+- [ ] CI の各ステップ（lint / typecheck / build / test）が **アップグレード後も通る** ことを確認した？
+- [ ] 「使ってない」と判断したコマンドがある場合、`package.json` から削除 or no-op 化した？
+- [ ] no-op 化した場合は **必ず incident-log に「恒久対応 TODO」を残す**
+      （その場しのぎを永続化させない）
 
 ### 再発防止チェックリスト
 
@@ -317,6 +341,123 @@ deploy:
 - [ ] 必須 secrets が **未設定でも CI が緑** になるよう preflight skip を入れる？
 - [ ] README or `docs/` に「設定すべき secrets 一覧」を明記する？
 - [ ] 「使う気がないワークフロー」を残すなら、最低限 `if:` ガードで赤を出さない？
+
+---
+
+## INC-006: ESLint 9 を本物として動かしたら 18 件の本物の問題が出た
+
+- **発生日**: 2026-04-27
+- **影響範囲**: 全 `(app)/*/page.tsx`、ダッシュボード、DetailFilterModal、postcss.config.mjs
+- **関連 commit**: 本コミット（INC-003 の恒久対応と同時に実施）
+
+### 経緯
+
+INC-003 で `eslint-config-next` 16.x + ESLint 9 + flat config を導入し、
+`npm run lint` を no-op から本物に切り戻したところ、以下 18 件が検出された。
+
+| カテゴリ | 件数 | 代表例 |
+|---|---|---|
+| `@typescript-eslint/no-explicit-any` | 14 | `(r.worker as any)?.name` |
+| DROP 済カラム参照（型推論失敗） | 1 | dashboard の `p.status === "active"` |
+| `react-hooks/set-state-in-effect` | 1 | DetailFilterModal の `useEffect` 内 setState |
+| `@next/next/no-html-link-for-pages` | 1 | dashboard の `<a href="/projects">` |
+| `import/no-anonymous-default-export` | 1 (warning) | postcss.config.mjs |
+
+これらは「lint を黙らせていた間ずっと潜んでいた本物の問題」であり、
+ANY 型という対症療法を放置することの危険性を示している。
+
+### 修正方針と中身
+
+#### A. `as any` × 14 → 共通 helper `relName()` に置換
+
+Supabase の自動生成型は relation join (`select('foo:foos(name)')`) を
+**常に配列 `T[]`** で型付けするが、実際の to-one 関係では単一オブジェクトが
+返ってくる。この乖離を `as any` で逃げていたため一掃した。
+
+新設: `src/lib/supabase/relation-types.ts`
+
+```ts
+export type RelationName = { name: string } | { name: string }[] | null;
+
+export function relName(r: unknown): string | undefined {
+  if (!r) return undefined;
+  if (Array.isArray(r)) {
+    const first = r[0];
+    if (first && typeof first === "object" && "name" in first) {
+      const n = (first as { name: unknown }).name;
+      return typeof n === "string" ? n : undefined;
+    }
+    return undefined;
+  }
+  if (typeof r === "object" && "name" in r) {
+    const n = (r as { name: unknown }).name;
+    return typeof n === "string" ? n : undefined;
+  }
+  return undefined;
+}
+
+export type RelationCompany = ... | ...[] | null;
+export function firstCompany(c: RelationCompany | undefined) { ... }
+```
+
+各ファイルで `(x.project as any)?.name ?? "-"` → `relName(x.project) ?? "-"`
+に置換。型は完全に絞られ、any は1つも残っていない。
+
+#### B. dashboard の DROP 済カラム参照
+
+旧 dashboard は `projects.status` / `projects.budget` / `invoices.status` /
+`invoices.amount` を直接 select していた。これらは
+`20260427000008_drop_legacy_project_status.sql` 以降で DROP / リネーム済。
+ランタイムでは Supabase が PGRST204 を返していたが、フロントは表示崩れだけで
+気付きにくい状態だった。
+
+Phase 2 で正式に再実装するまでは件数だけを安全に取得する暫定 UI に置換し、
+ファイル冒頭に Phase 2 で実装すべきクエリを明記:
+
+- 進行中案件 = `project_statuses.name in ('受注','段取り済み','着手済み')`
+  に紐づく案件件数（`project_status_id` 経由）
+- 総契約金額 = `projects.budget_incl_tax` の合計
+- 未入金残高 = `invoices.invoice_status='unpaid'` の `amount_incl_tax` 合計
+
+#### C. DetailFilterModal の `useEffect(() => setState(initial))`
+
+`react-hooks/set-state-in-effect`（React 19 推奨）違反。
+useEffect 内 setState は cascading render を招く。
+
+修正: useEffect を削除し、親 (`ProjectsListClient`) で
+`<DetailFilterModal key={modalOpen ? "open" : "closed"} ... />` と
+key prop による再 mount で `useState` の初期値経由で reset するように変更。
+React 公式推奨パターン。
+
+#### D. `<a href="/projects">` → `<Link>`
+
+Next.js 16 の `@next/next/no-html-link-for-pages` ルール違反。
+`<a>` だとクライアント側ルーティングを使わずフルリロードになるため
+`next/link` の `<Link>` に変更。
+
+#### E. postcss.config.mjs の anonymous default export
+
+`export default { ... }` を `const config = { ... }; export default config;` に。
+named binding 経由で export することで lint warning 解消。
+
+### 再発防止チェックリスト
+
+- [ ] `as any` を書こうとした時、本当に「型を諦める」しかないか？
+      多くの場合 `unknown` + 型ガード関数 / Pick 型 で代替可能
+- [ ] スキーマ変更（DROP/RENAME）した時、その列を参照している
+      アプリコードを `grep -rn '<col_name>' src/` で全件確認した？
+- [ ] 「lint を黙らせる」「any で逃げる」誘惑が出たら、
+      まず INC-006 を見て「あの時 18 件溜まっていた」事実を思い出す
+- [ ] 新しい page.tsx を作る時、Supabase の relation join アクセスは
+      `relName()` / `firstCompany()` 等の helper 経由で書く（直 `.name` 禁止）
+
+### 副次的な気付き
+
+- 暫定 stopgap (lint を no-op にする) を入れる時は **必ず incident-log に
+  「次に必ずやるべき恒久対応」を書く**。さもなくば永久に放置される。
+- 18 件の中には「型エラー」だけでなく「ランタイムバグ」(dashboard) も
+  混じっていた。lint は単なるスタイルチェックではなく **本物のバグ検出器** であり、
+  止めることは「飛行機の警告灯を絆創膏で隠す」のと同じ。
 
 ---
 

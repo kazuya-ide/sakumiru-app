@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { relName } from "@/lib/supabase/relation-types";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export default async function LedgerPage() {
                 <tr key={t.id} className="border-t hover:bg-slate-50">
                   <td className="px-4 py-2 font-medium">{t.name}</td>
                   <td className="px-4 py-2 hidden md:table-cell">
-                    {(t.project as any)?.name ?? "-"}
+                    {relName(t.project) ?? "-"}
                   </td>
                   <td className="px-4 py-2 hidden md:table-cell">{t.start_date ?? "-"}</td>
                   <td className="px-4 py-2 hidden md:table-cell">{t.end_date ?? "-"}</td>
