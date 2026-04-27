@@ -1593,7 +1593,6 @@ export type Database = {
           site_id: string | null
           start_date: string | null
           started_at: string | null
-          status: Database["public"]["Enums"]["project_status"]
           updated_at: string
           work_started_at: string | null
         }
@@ -1625,7 +1624,6 @@ export type Database = {
           site_id?: string | null
           start_date?: string | null
           started_at?: string | null
-          status?: Database["public"]["Enums"]["project_status"]
           updated_at?: string
           work_started_at?: string | null
         }
@@ -1657,7 +1655,6 @@ export type Database = {
           site_id?: string | null
           start_date?: string | null
           started_at?: string | null
-          status?: Database["public"]["Enums"]["project_status"]
           updated_at?: string
           work_started_at?: string | null
         }
@@ -2280,7 +2277,6 @@ export type Database = {
         | "vendor"
       plan_tier: "starter" | "standard" | "business"
       project_assignee_role: "reception" | "sales" | "site_manager"
-      project_status: "quoting" | "active" | "completed" | "cancelled"
       quotation_status: "draft" | "submitted" | "won" | "lost"
       send_status: "sent" | "failed" | "opened"
     }
@@ -2414,7 +2410,6 @@ export const Constants = {
       member_role: ["owner", "admin", "manager", "worker", "office", "vendor"],
       plan_tier: ["starter", "standard", "business"],
       project_assignee_role: ["reception", "sales", "site_manager"],
-      project_status: ["quoting", "active", "completed", "cancelled"],
       quotation_status: ["draft", "submitted", "won", "lost"],
       send_status: ["sent", "failed", "opened"],
     },
