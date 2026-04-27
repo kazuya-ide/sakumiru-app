@@ -10,7 +10,7 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
 };
 
 export default async function ProjectsPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: projects, error } = await supabase
     .from("projects")
     .select("id, code, name, status, start_date, end_date, budget, customer:customers(name)")

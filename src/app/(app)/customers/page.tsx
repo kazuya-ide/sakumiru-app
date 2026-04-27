@@ -4,7 +4,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: customers, error } = await supabase
     .from("customers")
     .select("id, name, contact, phone, email, address")

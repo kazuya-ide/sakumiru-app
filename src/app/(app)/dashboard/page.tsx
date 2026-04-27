@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Aggregate KPIs. RLS が自動でテナント境界を強制してくれる。
   const [projectsRes, customersRes, invoicesRes] = await Promise.all([
