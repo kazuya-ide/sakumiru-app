@@ -2,7 +2,6 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Pencil } from "lucide-react";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import ProjectDetailTabs from "../_components/ProjectDetailTabs";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +73,41 @@ export default async function ProjectDetailPage({
     .eq("project_id", id)
     .order("created_at", { ascending: false });
 
+  // 請求 / 入金 集計（収支サマリ用）
+  // invoices テーブルの amount_incl_tax と invoice_status を集計
+  const { data: invoiceRows } = await supabase
+    .from("invoices")
+    .select("amount_incl_tax, paid_amount_incl_tax, invoice_status")
+    .eq("project_id", id);
+
+  const invoiceTotal = (invoiceRows ?? []).reduce(
+    (s, r) => s + (Number(r.amount_incl_tax) || 0),
+    0,
+  );
+  const paidTotal = (invoiceRows ?? []).reduce(
+    (s, r) => s + (Number(r.paid_amount_incl_tax) || 0),
+    0,
+  );
+
+  // 原価合計（costs テーブル）
+  const { data: costRows } = await supabase
+    .from("costs")
+    .select("amount_excl_tax, amount_incl_tax")
+    .eq("project_id", id);
+
+  const costExclTotal = (costRows ?? []).reduce(
+    (s, r) => s + (Number(r.amount_excl_tax) || 0),
+    0,
+  );
+  const costInclTotal = (costRows ?? []).reduce(
+    (s, r) => s + (Number(r.amount_incl_tax) || 0),
+    0,
+  );
+  const profitExcl = (project.budget_excl_tax ?? 0) - costExclTotal;
+  const profitRate = project.budget_excl_tax
+    ? (profitExcl / project.budget_excl_tax) * 100
+    : 0;
+
   // ステータスタイムライン用の日付配列
   const timeline = [
     { label: "案件種別", value: project.project_category?.name ?? "-", icon: "📋" },
@@ -85,6 +119,22 @@ export default async function ProjectDetailPage({
     { label: "入金完了日", value: project.payment_completed_at, icon: "💰" },
     { label: "失注日", value: project.lost_at, icon: "❌" },
   ];
+
+  // ステータス進捗バー（サクミル準拠: 新規 → 見積提出済み → 受注 → 段取り済み → 着手済み → 完了）
+  // 失注は別レーンなので分岐
+  const PROGRESS_STEPS = [
+    "新規",
+    "見積提出済み",
+    "受注",
+    "段取り済み",
+    "着手済み",
+    "完了",
+  ] as const;
+  const currentStatusName = project.project_status?.name ?? "";
+  const currentStepIdx = PROGRESS_STEPS.indexOf(
+    currentStatusName as (typeof PROGRESS_STEPS)[number],
+  );
+  const isLost = currentStatusName === "失注";
 
   return (
     <div className="space-y-4">
@@ -123,13 +173,55 @@ export default async function ProjectDetailPage({
           </button>
         </div>
 
-        {/* ステータスバッジ */}
+        {/* ステータス進捗バー（サクミル準拠） */}
         <div className="mb-4">
-          <StatusBadge
-            label={project.project_status?.name}
-            color={project.project_status?.color}
-            size="md"
-          />
+          {isLost ? (
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                失注
+              </span>
+              <span className="text-xs text-slate-500">
+                この案件は失注として記録されています
+              </span>
+            </div>
+          ) : (
+            <div className="overflow-x-auto -mx-2 px-2">
+              <div className="flex items-stretch min-w-max gap-0">
+                {PROGRESS_STEPS.map((step, i) => {
+                  const reached = currentStepIdx >= i;
+                  const isCurrent = currentStepIdx === i;
+                  return (
+                    <div
+                      key={step}
+                      className={
+                        "relative flex items-center justify-center px-4 py-2 text-xs font-bold whitespace-nowrap " +
+                        (i === 0 ? "rounded-l-lg" : "") +
+                        (i === PROGRESS_STEPS.length - 1
+                          ? " rounded-r-lg"
+                          : "") +
+                        " " +
+                        (reached
+                          ? isCurrent
+                            ? "bg-brand-600 text-white"
+                            : "bg-brand-100 text-brand-700"
+                          : "bg-slate-100 text-slate-400")
+                      }
+                      style={{
+                        minWidth: 110,
+                        clipPath:
+                          i === PROGRESS_STEPS.length - 1
+                            ? undefined
+                            : "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)",
+                        marginLeft: i === 0 ? 0 : -10,
+                      }}
+                    >
+                      {step}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* タイムライン（横スクロール対応）*/}
@@ -159,7 +251,17 @@ export default async function ProjectDetailPage({
         <div className="lg:col-span-9 space-y-4">
           <ProjectDetailTabs projectId={project.id} activeTab={activeTab}>
             {activeTab === "project" && (
-              <ProjectMainTab project={project} />
+              <ProjectMainTab
+                project={project}
+                summary={{
+                  costExcl: costExclTotal,
+                  costIncl: costInclTotal,
+                  profitExcl,
+                  profitRate,
+                  invoiceTotal,
+                  paidTotal,
+                }}
+              />
             )}
             {activeTab !== "project" && (
               <Placeholder tab={activeTab} />
@@ -264,28 +366,67 @@ type ProjectDetail = {
 };
 
 // ===== 「案件管理」サブタブの中身 =====
-function ProjectMainTab({ project }: { project: ProjectDetail }) {
+type Summary = {
+  costExcl: number;
+  costIncl: number;
+  profitExcl: number;
+  profitRate: number;
+  invoiceTotal: number;
+  paidTotal: number;
+};
+
+function ProjectMainTab({
+  project,
+  summary,
+}: {
+  project: ProjectDetail;
+  summary: Summary;
+}) {
+  const unpaid = summary.invoiceTotal - summary.paidTotal;
   return (
     <div className="space-y-4">
-      {/* 収支サマリ */}
+      {/* 収支サマリ（5カード: サクミル準拠） */}
       <Section title="📊 収支サマリ">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <SummaryCard
             label="契約金額"
-            excl={project.budget_excl_tax}
-            incl={project.budget_incl_tax}
+            primary={project.budget_incl_tax}
+            secondary={`税抜 ¥${(project.budget_excl_tax ?? 0).toLocaleString("ja-JP")}`}
+            primaryUnit="税込"
           />
           <SummaryCard
             label="原価合計"
-            excl={null}
-            incl={null}
-            note="集計機能は Phase 1.5"
+            primary={summary.costIncl}
+            secondary={`税抜 ¥${summary.costExcl.toLocaleString("ja-JP")}`}
+            primaryUnit="税込"
           />
           <SummaryCard
-            label="粗利"
-            excl={null}
-            incl={null}
-            note="集計機能は Phase 1.5"
+            label="粗利（粗利率）"
+            primary={summary.profitExcl}
+            secondary={`${summary.profitRate.toFixed(2)}%`}
+            primaryUnit="税抜"
+            tone={summary.profitExcl >= 0 ? "good" : "bad"}
+          />
+          <SummaryCard
+            label="請求金額（税込）"
+            primary={summary.invoiceTotal}
+            secondary={
+              unpaid > 0
+                ? `未請求 ¥${(
+                    (project.budget_incl_tax ?? 0) - summary.invoiceTotal
+                  ).toLocaleString("ja-JP")}`
+                : undefined
+            }
+          />
+          <SummaryCard
+            label="入金金額（税込）"
+            primary={summary.paidTotal}
+            secondary={
+              unpaid > 0
+                ? `未入金 ¥${unpaid.toLocaleString("ja-JP")}`
+                : "完済"
+            }
+            tone={unpaid === 0 && summary.paidTotal > 0 ? "good" : undefined}
           />
         </div>
       </Section>
@@ -419,29 +560,34 @@ function KV({
 
 function SummaryCard({
   label,
-  excl,
-  incl,
-  note,
+  primary,
+  primaryUnit,
+  secondary,
+  tone,
 }: {
   label: string;
-  excl: number | null;
-  incl: number | null;
-  note?: string;
+  primary: number | null;
+  primaryUnit?: string;
+  secondary?: string;
+  tone?: "good" | "bad";
 }) {
+  const toneClass =
+    tone === "good"
+      ? "text-emerald-700"
+      : tone === "bad"
+        ? "text-rose-700"
+        : "text-slate-800";
   return (
-    <div className="border rounded-lg p-3">
+    <div className="border rounded-lg p-3 bg-white">
       <div className="text-xs text-slate-500">{label}</div>
-      <div className="text-lg font-bold mt-1">
-        ¥{(excl ?? 0).toLocaleString("ja-JP")}
-        <span className="text-xs text-slate-400 ml-1">税抜</span>
+      <div className={`text-lg font-bold mt-1 ${toneClass}`}>
+        ¥{(primary ?? 0).toLocaleString("ja-JP")}
+        {primaryUnit && (
+          <span className="text-[10px] text-slate-400 ml-1">{primaryUnit}</span>
+        )}
       </div>
-      {incl != null && (
-        <div className="text-[10px] text-slate-500">
-          税込 ¥{incl.toLocaleString("ja-JP")}
-        </div>
-      )}
-      {note && (
-        <div className="text-[10px] text-slate-400 mt-1">{note}</div>
+      {secondary && (
+        <div className="text-[10px] text-slate-500 mt-0.5">{secondary}</div>
       )}
     </div>
   );
