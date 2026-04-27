@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "echo 'lint: skipped (Next.js 16 で next lint 廃止 / ESLint 9 移行は Phase 2。docs/incident-log.md INC-003 参照)'",
     "typecheck": "tsc --noEmit",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",

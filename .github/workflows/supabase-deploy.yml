@@ -7,8 +7,30 @@ on:
       - "supabase/**"
 
 jobs:
+  # GitHub Secrets が未設定の環境では deploy ジョブをスキップする（INC-005）
+  # 必要な secrets: SUPABASE_ACCESS_TOKEN / SUPABASE_DB_PASSWORD / SUPABASE_PROJECT_REF
+  # 現状は手動 push 運用のため、secrets が空ならジョブを skip して CI を緑に保つ。
+  preflight:
+    name: Check secrets configured
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          if [ -n "$SUPABASE_PROJECT_REF" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SUPABASE_* secrets が未設定のため Deploy Supabase はスキップします (docs/incident-log.md INC-005)"
+          fi
+
   deploy:
     name: Push migrations & deploy functions
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
     runs-on: ubuntu-latest
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
