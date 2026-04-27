@@ -4,7 +4,11 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
-// ⚠️ 開発用テストアカウント（本番リリース前に削除）
+// ⚠️ 開発用テストアカウント
+// 表示制御: NEXT_PUBLIC_SHOW_TEST_ACCOUNTS=true の環境のみ表示
+// Vercel 本番では env var 削除で自動的に非表示
+const SHOW_TEST_ACCOUNTS = process.env.NEXT_PUBLIC_SHOW_TEST_ACCOUNTS === "true";
+
 const TEST_ACCOUNTS = [
   { label: "マスター（owner）",     email: "master@test.local",   password: "Test1234!", color: "bg-purple-100 text-purple-700 border-purple-300" },
   { label: "管理者（admin）",       email: "admin@test.local",    password: "Test1234!", color: "bg-blue-100 text-blue-700 border-blue-300" },
@@ -45,7 +49,7 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-brand-50 to-white">
-      <div className="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className={`w-full ${SHOW_TEST_ACCOUNTS ? "max-w-3xl grid grid-cols-1 md:grid-cols-2" : "max-w-md"} gap-6`}>
         {/* ログインフォーム */}
         <div className="bg-white rounded-2xl shadow-lg p-8 border">
           <h1 className="text-2xl font-bold mb-1">ログイン</h1>
@@ -85,7 +89,8 @@ export default function LoginPage() {
           </form>
         </div>
 
-        {/* テストアカウント一覧 */}
+        {/* テストアカウント一覧（環境変数で制御）*/}
+        {SHOW_TEST_ACCOUNTS && (
         <div className="bg-white rounded-2xl shadow-lg p-6 border">
           <div className="mb-3">
             <h2 className="text-lg font-bold text-slate-800">⚠️ 開発用テストアカウント</h2>
@@ -116,6 +121,7 @@ export default function LoginPage() {
             ロール別の権限差は今後実装。
           </p>
         </div>
+        )}
       </div>
     </main>
   );
