@@ -1,0 +1,34 @@
+-- ============================================================
+-- インシデント修正: current_company_id() の EXECUTE 権限を authenticated に再付与
+--
+-- 【背景】
+--   20260427000006_security_hardening.sql で
+--     revoke execute on function public.current_company_id() from authenticated;
+--   を実行。コメントには「RLS 評価時は postgres ロールで実行されるため動作する」
+--   と書かれていたが、これは誤り。
+--   RLS 評価は「クエリを発行したロール（=authenticated）」のコンテキストで行われる。
+--   authenticated に EXECUTE 権限がないと、RLS から関数を呼んだ時点で
+--   ERROR: permission denied for function current_company_id (SQLSTATE 42501)
+--   が発生し、UI で全テーブルが空 or エラーになる。
+--
+-- 【症状】
+--   - 全テストアカウントで /projects 等の画面が
+--     「permission denied for function current_company_id」で落ちる
+--
+-- 【修正方針】
+--   - current_company_id: RLS から authenticated コンテキストで呼ばれるため
+--     authenticated に EXECUTE 必須 → 再付与
+--   - handle_new_user: auth.users INSERT トリガーから postgres コンテキストで
+--     呼ばれるだけなので REVOKE 維持（外部 RPC からは呼ばせない）
+--
+-- 【再発防止】
+--   - SECURITY DEFINER 関数の EXECUTE 権限を REVOKE する前に、
+--     その関数が「どのロールから・どの経路で」呼ばれるかを必ず洗い出す。
+--   - RLS ポリシーが参照する関数は authenticated への GRANT が必須。
+--   - 詳細は docs/incident-log.md INC-001 参照。
+-- ============================================================
+
+grant execute on function public.current_company_id() to authenticated;
+
+-- handle_new_user は trigger 専用なので REVOKE 維持（明示コメントのみ）
+-- grant execute on function public.handle_new_user() to authenticated; -- 不要

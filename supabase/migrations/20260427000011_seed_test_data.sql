@@ -14,6 +14,13 @@
 --   DELETE FROM project_categories WHERE company_id = '1710094d-36e6-4021-b81c-12943a97969d';
 -- ============================================================
 
+-- 【CI 安全化】testの会社レコードが存在しない環境（CI のローカル Supabase 等）
+-- でも seed が通るよう、参照される companies 行を冒頭で保証する。
+-- 本番には既に存在するため on conflict do nothing で no-op。
+insert into public.companies (id, name, plan)
+values ('1710094d-36e6-4021-b81c-12943a97969d', 'テスト株式会社', 'starter')
+on conflict (id) do nothing;
+
 do $$
 declare
   cid uuid := '1710094d-36e6-4021-b81c-12943a97969d';
