@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
 import { Search, SlidersHorizontal, Plus, Settings2 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -485,6 +485,27 @@ function MultiStatusSelect({
   onChange: (ids: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // 外側クリック / Esc キーで閉じる
+  useEffect(() => {
+    if (!open) return;
+    function handleDown(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", handleDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
   const label =
     selected.length === 0
       ? "全て"
@@ -493,7 +514,7 @@ function MultiStatusSelect({
         : `${selected.length}件選択中`;
 
   return (
-    <div className="relative mt-1">
+    <div ref={wrapRef} className="relative mt-1">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -505,50 +526,54 @@ function MultiStatusSelect({
         <span className="text-slate-400">▾</span>
       </button>
       {open && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setOpen(false)}
-            aria-hidden
-          />
-          <div className="absolute z-20 mt-1 w-full bg-white border rounded-lg shadow-lg p-2 max-h-64 overflow-y-auto">
-            {options.map((s) => {
-              const checked = selected.includes(s.id);
-              return (
-                <label
-                  key={s.id}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => {
-                      onChange(
-                        checked
-                          ? selected.filter((x) => x !== s.id)
-                          : [...selected, s.id],
-                      );
-                    }}
-                  />
-                  <span
-                    className="w-2 h-2 rounded-full inline-block"
-                    style={{ backgroundColor: s.color ?? "#9CA3AF" }}
-                  />
-                  <span>{s.name}</span>
-                </label>
-              );
-            })}
-            {selected.length > 0 && (
+        <div className="absolute z-30 mt-1 w-full min-w-[200px] bg-white border rounded-lg shadow-lg p-2 max-h-64 overflow-y-auto">
+          {options.map((s) => {
+            const checked = selected.includes(s.id);
+            return (
+              <label
+                key={s.id}
+                className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => {
+                    onChange(
+                      checked
+                        ? selected.filter((x) => x !== s.id)
+                        : [...selected, s.id],
+                    );
+                  }}
+                />
+                <span
+                  className="w-2 h-2 rounded-full inline-block"
+                  style={{ backgroundColor: s.color ?? "#9CA3AF" }}
+                />
+                <span>{s.name}</span>
+              </label>
+            );
+          })}
+          <div className="flex items-center justify-between pt-2 mt-1 border-t">
+            {selected.length > 0 ? (
               <button
                 type="button"
                 onClick={() => onChange([])}
-                className="w-full text-xs text-slate-500 hover:text-slate-700 underline mt-1"
+                className="text-xs text-slate-500 hover:text-slate-700 underline"
               >
                 クリア
               </button>
+            ) : (
+              <span />
             )}
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="text-xs text-brand-600 hover:text-brand-700 font-medium"
+            >
+              閉じる
+            </button>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
