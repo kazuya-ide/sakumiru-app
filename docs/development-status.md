@@ -1,6 +1,6 @@
 # 開発ステータス・注意事項・未完了タスク
 
-最終更新: 2026-04-27
+最終更新: 2026-04-27 (案件管理UI Phase 1 完了)
 
 このファイルは「今どこまで出来ているか」「運用上の注意点」「未完了タスク」を一元管理します。
 新しい作業が完了したら本ファイルを更新してください。
@@ -19,6 +19,8 @@
 | Vercelデプロイ | ✅ Production稼働中 | https://sakumiru-app.vercel.app |
 | RLS | ✅ 全テーブル company_id スコープ有効 | 5階層別の権限差は未実装 |
 | セキュリティ警告 | ✅ SQL面 0件、Auth面 1件残（Pro plan必要） | |
+| **案件管理UI** | ✅ **一覧/詳細/詳細フィルター実装** | **`/projects`, `/projects/[id]`** |
+| **テストデータ** | ✅ **案件10件 + 顧客5社 + 作業場所10 + 先方担当者5 + 案件種別4** | **testの会社** |
 
 ---
 
@@ -190,11 +192,76 @@ DELETE FROM auth.users WHERE email LIKE '%@test.local';
 ## 5. 関連ドキュメント
 
 - [docs/sakumiru-mapping.md](sakumiru-mapping.md) — サクミル全画面とDB構造の対応表
+- [docs/projects-table-mapping.md](projects-table-mapping.md) — 案件管理：サクミル↔自アプリ対応表
 - [docs/deployment-errors.md](deployment-errors.md) — ビルド・デプロイエラー履歴
 - [docs/architecture.md](architecture.md) — 全体アーキテクチャ
 - [docs/data-model.md](data-model.md) — データモデル定義
 - [docs/features.md](features.md) — 機能一覧・プラン構成
 - [docs/建築SaaS開発_統合ガイド.docx](建築SaaS開発_統合ガイド.docx) — スコープ・進行プラン
+
+---
+
+## 6. 実装履歴（時系列）
+
+### 2026-04-27 #5: 案件管理UI Phase 1 + テストデータ投入
+
+**実装内容**:
+- 案件一覧画面 (`/projects`)
+  - 17カラム表示 / キーワード検索 / ステータスマルチ選択
+  - 詳細フィルターモーダル（顧客名/作業場所/先方担当者/受付日範囲/開始日範囲/契約金額範囲）
+  - レスポンシブ対応（md以上: テーブル / md未満: カード形式）
+- 案件詳細画面 (`/projects/[id]`)
+  - ヘッダ + ステータスバッジ + 8項目タイムライン
+  - サブタブ7つ（案件管理のみ実装、他はプレースホルダー）
+  - 案件管理タブ: 収支サマリ + 案件情報3ブロック + 案件補足
+  - 右サイドバー: タスク / 担当者（受付・営業・現場）/ 写真台帳
+
+**新規ファイル**:
+- `docs/projects-table-mapping.md` — 実装の根拠となる対応表
+- `src/components/ui/StatusBadge.tsx` — 共通ステータスバッジ（マスタの色HEX対応）
+- `src/app/(app)/projects/page.tsx` — 一覧 Server Component（更新）
+- `src/app/(app)/projects/[id]/page.tsx` — 詳細 Server Component
+- `src/app/(app)/projects/_components/ProjectsListClient.tsx` — 一覧Client（フィルター含む）
+- `src/app/(app)/projects/_components/DetailFilterModal.tsx` — 詳細フィルターモーダル
+- `src/app/(app)/projects/_components/ProjectDetailTabs.tsx` — サブタブナビ
+
+**テストデータ**:
+- 案件種別マスタ 4種（工事/リフォーム/メンテナンス/新築）
+- 顧客マスタ 5社（プレックス不動産/山田工務店/佐藤不動産/田中建築事務所/鈴木不動産）
+- 作業場所マスタ 10箇所（顧客に紐付け）
+- 先方担当者マスタ 5名（顧客に紐付け）
+- 案件 10件（全7ステータスに分散：新規1/見積提出済み2/受注2/段取り済み1/着手済み2/完了1/失注1）
+
+**Phase 1.5 持ち越し**:
+- 案件作成・編集画面
+- サブタブ「見積/契約/原価明細/請求」中身
+- 収支サマリの集計（contracts/costs/invoices SUM）
+- 一覧設定（カラム編集・カスタムビュー）
+
+### 2026-04-27 #4: テストアカウント6個 + ログイン画面改修
+
+- `handle_new_user` trigger に `skip_default_setup` フラグ追加
+- 6ロール分のテストユーザーを `auth.users` に直接INSERT
+- ログイン画面右側にテストアカウント表示（`NEXT_PUBLIC_SHOW_TEST_ACCOUNTS=true` 制御）
+
+### 2026-04-27 #3: Vercel デプロイエラー修正
+
+- `src/lib/supabase/middleware.ts` `setAll(cookiesToSet)` の型注釈追加
+- `server.ts` も同様に予防修正
+- Vercel 環境変数 `NEXT_PUBLIC_SUPABASE_URL` / `ANON_KEY` 設定 → 500エラー解消
+
+### 2026-04-27 #2: project_status マスタ統合 + Storage バケット作成
+
+- 旧 ENUM `project_status` (4値) と `projects.status` カラム削除
+- サクミル準拠 7値マスタ + sign-up trigger 拡張で自動投入
+- Storage バケット 3つ (photos/documents/avatars) + RLSポリシー12件
+
+### 2026-04-27 #1: サクミル参考のDB設計確定
+
+- マイグレーション 7ファイル新規追加（master/extend_existing/new_entities/security/perf_fix）
+- 41テーブル + 全RLS有効
+- TypeScript型自動生成
+- セキュリティ・パフォーマンス警告対応
 
 ---
 
