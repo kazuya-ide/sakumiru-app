@@ -132,7 +132,7 @@ export default function AppShell({
             <div className="font-bold">現場管理</div>
           </div>
         </header>
-        <main className="p-4 md:p-6 max-w-7xl mx-auto">{children}</main>
+        <main className="p-4 md:p-6">{children}</main>
       </div>
     </div>
   );
